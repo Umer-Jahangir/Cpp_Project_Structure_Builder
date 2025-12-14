@@ -1,189 +1,111 @@
 # AutoAssignment Builder
 
-AutoAssignment Builder is a web app that helps beginner CS students generate starter assignment projects automatically using the Cline CLI and an AI parsing agent (Kestra AI).
+AutoAssignment Builder generates beginner-friendly C++ starter projects from an assignment description by orchestrating AI and automation.
 
-## Project Goal
+Repository layout
+- `frontend/` — Vite + React application that sends assignment text to a Kestra webhook and downloads generated project zips
+- `builder.yaml` — an example Kestra workflow (install it in your Kestra instance). There is also `Untitled-1.yaml` as an alternate example. The workflow:
 
-Build a beginner-friendly, hackathon-ready web app that:
+  - Calls Google Gemini to generate a JSON project structure
+  - Validates and sanitizes AI output
+  - Creates files and folders and produces `project.zip` (and an `artifact.json` manifest)
 
-- Accepts an assignment description (TXT, PDF, DOCX) or pasted text.
-- Uses Kestra AI to parse the assignment into a project structure, starter code, and documentation.
-- Produces a Cline CLI workflow JSON that, when executed on the user's machine, creates the project folder and files.
+Note: For Kestra installation, see the official Kestra documentation or the Kestra project site for Docker and cloud deployment options.
+Summary
+- The frontend triggers a Kestra webhook with `assignment_text`. The Kestra workflow runs, produces a zip of the generated starter project, and the frontend polls for completion and downloads the resulting file.
 
-## Tech Stack
+Prerequisites
+- Node 18+ and npm/yarn installed locally.
+- A running Kestra instance with the `Google Gemini` provider configured and a `GEMINI_API_KEY` secret.
+- A Kestra webhook configured (namespace/flow/key) to trigger the included workflow.
 
-- Frontend: React + Tailwind CSS
-- Backend: Node.js + Express
-- AI Parsing: Kestra AI Agent
-- Project Generation: Cline CLI
-- Deployment: Vercel
+Features
+- Generate a C++ project skeleton (headers, implementation, Makefile, README) from a short description
+- Validates the AI-produced JSON and sanitizes code strings
+- Produces a downloadable zip bundle with an artifact manifest
 
-## Features
-
-1) Frontend
-
-- Upload assignment file (TXT, PDF, DOCX) or paste text.
-- Quick Start / Tutorial page with step-by-step instructions:
-  - Installing Node.js
-  - Installing Cline CLI
-  - Download workflow JSON
-  - Paste terminal command to generate project
-- Download button for workflow JSON
-- Display ready-to-copy CLI command with copy-to-clipboard
-- Mobile-friendly UI
-
-2) Backend
-
-- API endpoint: `/api/generate`
-- Accepts file upload or pasted text
-- Sends text to Kestra AI Agent and receives structured output
-- Converts AI output into Cline CLI workflow JSON
-- Returns workflow JSON and a ready-to-copy Cline CLI command
-- Graceful error handling with clear API responses
-
-3) AI Agent (Kestra)
-
-- Parses assignment text to produce:
-  - Folder structure
-  - Starter code skeletons for main files (C++, Python, Java)
-  - `README.md` content
-  - `docs/file_purpose.md` explaining each file
-- Returns structured JSON suitable for the workflow generator
-
-4) Workflow JSON Generator
-
-- Converts AI JSON into Cline CLI workflow JSON with steps to create folders and files and include their contents
-- Ensures compatibility with latest Cline CLI
-- Returns workflow JSON and suggested CLI command
-
-5) Terminal Instructions
-
-- Provide platform-specific guidance (Windows, macOS, Linux)
-- Suggest default output directory (Desktop) if user prefers
-
-6) Cline CLI Execution
-
-- Generates folders and files as defined in workflow JSON
-- Uses beginner-friendly defaults and handles errors (file exists, invalid paths)
-
-## API Contract
-
-POST `/api/generate`
-
-Request (multipart/form-data or JSON):
-
-- `text` (string) — pasted assignment text OR
-- `file` (file) — uploaded assignment file (txt, pdf, docx)
-
-Response (application/json):
-
-{
-  "workflowJson": { /* Cline workflow JSON */ },
-  "cliCommand": "cline run --workflow ./StudentRecords.workflow.json --output ~/Desktop/StudentRecords",
-  "aiOutput": { /* raw AI JSON for inspection */ }
-}
-
-Error Response:
-
-{
-  "error": "Description of error",
-  "details": { /* optional */ }
-}
-
-## Kestra AI JSON Schema (recommended)
-
-The AI agent should return a JSON structure like:
-
-{
-  "project_name": "StudentRecords",
-  "description": "C++ student records program",
-  "folders": [
-    {"path": "", "type": "dir"},
-    {"path": "docs", "type": "dir"}
-  ],
-  "files": [
-    {"path": "main.cpp", "language": "cpp", "content": "..."},
-    {"path": "student.h", "language": "cpp", "content": "..."},
-    {"path": "student.cpp", "language": "cpp", "content": "..."},
-    {"path": "README.md", "language": "text", "content": "..."},
-    {"path": "docs/file_purpose.md", "language": "text", "content": "..."}
-  ],
-  "run_instructions": "..."
-}
-
-The backend will map this to a Cline workflow JSON.
-
-## Cline Workflow JSON (example)
-
-An example workflow JSON entry for creating a file:
-
-{
-  "steps": [
-    {"action": "mkdir", "path": "StudentRecords/docs"},
-    {"action": "write", "path": "StudentRecords/README.md", "content": "..."}
-  ],
-  "metadata": {"project_name": "StudentRecords"}
-}
-
-The backend will return a downloadable `.workflow.json` file and a `cline run` command.
-
-## Quick Start (for end users)
-
-1. Install Node.js (LTS) from https://nodejs.org/
-2. Install Cline CLI (follow Cline docs):
-
+Quickstart (local frontend)
+1. Clone the repo.
+2. Start the frontend dev server:
+```bash
+cd frontend
+npm install
+npm run dev
 ```
-npm i -g cline-cli
+To build and preview a production build locally:
+```bash
+npm run build
+npm run preview
+```
+3. Create `frontend/.env` with your Kestra configuration (example keys below). Never commit secrets — an example `.env.example` is included (`frontend/.env.example`). If you accidentally committed a `.env` file, remove it and rotate any exposed credentials (example):
+
+```bash
+# Remove the file from the repo while keeping it locally
+git rm --cached frontend/.env
+git commit -m "Remove sensitive .env"
+# (optional) Force-rewrite history only if needed; be cautious.
 ```
 
-3. From the web app, download the workflow JSON or copy the provided command.
-4. Open a terminal and run the command (example for Windows PowerShell):
-
-```
-cd $HOME\Desktop
-cline run --workflow .\StudentRecords.workflow.json --output .\StudentRecords
-```
-
-## Environment variables / local `.env`
-
-Create a `.env` file in `backend/` containing:
-
-```
-KESTRA_API_URL=https://your-kestra-endpoint.example/agent
-KESTRA_API_KEY=sk_xxx
-MAX_UPLOAD_BYTES=4194304
-CORS_ORIGIN=*
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX=100
+Environment variables (frontend/.env)
+```env
+VITE_KESTRA_URL=http://localhost:8080
+VITE_TENANT_ID=main
+VITE_KESTRA_USERNAME=yourKestraUser
+VITE_KESTRA_PASSWORD=yourKestraPassword
+VITE_WEBHOOK_NAMESPACE=your-namespace
+VITE_WEBHOOK_FLOW=your-flow-id
+# Optional: For local dev proxy set VITE_API_URL=http://localhost:8080
+VITE_WEBHOOK_KEY=<your-webhook-key>
 ```
 
-Use `npm run dev` in `backend/` and `frontend/` to run services locally. The frontend will proxy `/api` to `http://localhost:3000` when using the Vite dev server.
+How it works (flow)
+1. Frontend posts to Kestra webhook: `/api/v1/{tenant}/executions/webhook/{namespace}/{flow}/{key}` with `{ assignment_text }`.
+2. `generate_project_structure` uses the Gemini plugin to return JSON (project_name, folders, files, readme).
+3. `fix_and_validate_structure` validates and cleans the JSON (fixing encoding issues and double-encoded strings).
+4. `create_files_and_zip` writes files, creates a zip (`project.zip`) and writes an `artifact.json` map.
+5. Frontend polls Kestra; when the workflow completes it downloads `project.zip` via a secure endpoint. The workflow exposes a `download` output ID (a file path) that the frontend reads and uses to fetch the zip. If you rename this output, update the UI accordingly.
 
-## Deployment
+Test the webhook by triggering it manually (replace placeholders):
 
-- Deploy frontend and backend to Vercel (use Vercel Serverless functions for the backend API).
-
-## Example
-
-Input text:
-
-```
-Create a C++ Student Records program:
-- main.cpp, student.h, student.cpp
-- Output average grades for students
-- Include README.md and docs/file_purpose.md
+```bash
+curl -X POST -H "Content-Type: application/json" -u "${KESTRA_USER}:${KESTRA_PASS}" \
+  -d '{"assignment_text":"Create a simple C++ calculator program with a Makefile"}' \
+  "${KESTRA_URL}/api/v1/${TENANT}/executions/webhook/${NAMESPACE}/${FLOW}/${KEY}"
 ```
 
-Expected output: `StudentRecords` folder on Desktop with files above.
+Replace environment placeholders with your actual values.
 
----
+Kestra-specific notes
+- The Gemini plugin requires a Kestra secret `GEMINI_API_KEY` configured in your Kestra instance.
+- The workflow writes `artifact.json` with a mapping for artifacts; adjust UI code if you change output names.
+- Install the workflow to your Kestra instance by importing the YAML file (`builder.yaml` or `Untitled-1.yaml`) through the Kestra UI (Workflows → Create/Import) or using the Kestra CLI.
 
-## Next Steps for Implementation
+Deployment
+- Frontend: deploy to static hosting (Vercel recommended). Set `frontend/` as the project root, `dist` as the build output directory, and use `npm run build` as the build command.
+  - Vercel: set `Frontend` > `Build Command` to `npm run build`, `Output Directory` to `dist`, and set the environment variables under your project settings.
+- Kestra: run the workflow in a hosted Kestra or a local Kestra instance. Make sure the webhook is reachable by the frontend.
 
-1. Scaffold `frontend/` and `backend/` folders with minimal `package.json` and `README.md`.
-2. Implement `/api/generate` endpoint that accepts uploads and text.
-3. Implement Kestra integration and workflow generator.
+Troubleshooting
+- Missing env variables: Ensure `VITE_KESTRA_URL`, `VITE_KESTRA_USERNAME`, and `VITE_KESTRA_PASSWORD` are set. Local proxy tests can use `VITE_API_URL`.
+- AI returns wrapped output or invalid JSON: The `fix_and_validate_structure` step attempts to unwrap `predictions` and parse top-level JSON strings. Check execution logs for the debug prints noting the structure of the JSON received.
+- CORS or network issues: When testing locally, use the Vite proxy (set `VITE_API_URL`) or configure Kestra to allow requests from your development host.
+- Download output missing: The UI expects a `download` output file path; ensure your workflow output declaration includes a `download` FILE output and that `create_files_and_zip` writes a `project.zip` and `artifact.json`.
 
-If you'd like, I can scaffold the minimal repo now (frontend + backend skeletons). Which step should I take next?
+Security
+- Do not commit `.env` files or secrets. Use Kestra secrets for production credentials.
+- If a `.env` containing credentials was used to build the frontend, those credentials may be embedded in the built `dist` assets. If you committed built assets (or `frontend/.env`) with secrets, remove them, rotate the credentials, and re-build the frontend.
+- If you accidentally committed a `.env` file, remove it and rotate any exposed credentials (example):
 
----
+```bash
+# Remove the file from the repo while keeping it locally
+git rm --cached frontend/.env
+git commit -m "Remove sensitive .env"
+# For history rewriting you can use tools like git-filter-repo or BFG (advanced and irreversible):
+# git filter-repo --path frontend/.env --invert-paths
+```
+
+Contributing
+- Contributions welcome — open issues or PRs to improve the AI prompts, validation, and frontend UX.
+
+License
+- This project does not include a license by default. Add a `LICENSE` file (e.g., MIT) to set licensing terms.
