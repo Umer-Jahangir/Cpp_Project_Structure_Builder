@@ -108,6 +108,3 @@ git commit -m "Remove sensitive .env"
 
 Contributing
 - Contributions welcome — open issues or PRs to improve the AI prompts, validation, and frontend UX.
-
-License
-- This project does not include a license by default. Add a `LICENSE` file (e.g., MIT) to set licensing terms.
