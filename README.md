@@ -4,7 +4,9 @@ AutoAssignment Builder generates beginner-friendly C++ starter projects from an 
 
 Repository layout
 - `frontend/` — Vite + React application that sends assignment text to a Kestra webhook and downloads generated project zips
-- `builder.yaml` — an example Kestra workflow (install it in your Kestra instance). There is also `Untitled-1.yaml` as an alternate example. The workflow:
+- `builder.yaml` — an example Kestra workflow (install it in your Kestra instance). 
+
+The workflow:
 
   - Calls Google Gemini to generate a JSON project structure
   - Validates and sanitizes AI output

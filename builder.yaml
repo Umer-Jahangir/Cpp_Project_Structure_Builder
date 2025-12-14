@@ -1,0 +1,185 @@
+id: ai_project_builder_gemini
+namespace: company.team
+description: Generate a simple C++ project folder structure with starter files and README as a zip using Google Gemini (No Makefile)
+
+inputs:
+  - id: assignment_text
+    type: STRING
+    description: "The assignment description from the user."
+    required: false
+
+tasks:
+  # 1️⃣ Generate project structure from assignment text using Gemini
+  - id: generate_project_structure
+    type: io.kestra.plugin.ai.completion.JSONStructuredExtraction
+    provider:
+      type: io.kestra.plugin.ai.provider.GoogleGemini
+      apiKey: "{{ secret('GEMINI_API_KEY') }}"
+      modelName: gemini-2.5-flash
+    prompt: |
+      # TASK
+      You are a C++ project structure generator for university programming assignments. Generate a complete, compilable C++17 project with starter code and documentation.
+      
+      # OUTPUT FORMAT
+      Return ONLY valid JSON. No markdown, no explanations, no code blocks - just raw JSON.
+      
+      {
+        "project_name": "CamelCaseProjectName",
+        "folders": ["src", "include", "tests"],
+        "files": [
+          {
+            "path": "src/main.cpp",
+            "starter_code": "#include <iostream>\n\nint main() {\n    // TODO: Implement core functionality\n    std::cout << \"Program started\" << std::endl;\n    return 0;\n}"
+          },
+          {
+            "path": "include/MyClass.h",
+            "starter_code": "#ifndef MYCLASS_H\n#define MYCLASS_H\n\nclass MyClass {\npublic:\n    MyClass();\n    void doSomething(); // TODO: Implement\n};\n\n#endif"
+          }
+        ],
+        "readme": "# Project Title\n\n## Overview\nBrief description of the assignment.\n\n## Project Structure\n```\nproject_name/\n├── src/\n│   └── main.cpp\n├── include/\n│   └── MyClass.h\n└── README.md\n```\n\n## Files Description\n\n### src/main.cpp\nEntry point. Contains main() function and starter code.\n\n### include/MyClass.h\nHeader for a class used in the project.\n\n## Key Classes/Functions\n\n### MyClass\n- `MyClass()`: Constructor\n- `doSomething()`: TODO implementation\n\n## Compilation Instructions\n```bash\ng++ -std=c++17 -Wall -Iinclude src/*.cpp -o project_name\n./project_name\n```\n\n## Implementation Tasks\n1. Implement core functionality in main.cpp\n2. Implement MyClass methods\n3. Add unit tests if needed\n\n## Notes\n- Ensure code compiles without errors\n- Use only C++17 features\n- Keep starter code simple and documented"
+      
+      # CRITICAL RULES
+      - "folders" MUST be a JSON array: ["src", "include"], not a string
+      - "files" MUST be a JSON array of objects with "path" and "starter_code"
+      - Use actual \n for line breaks in code
+      - main.cpp is always required
+      - Include optional headers in include/
+      
+      ASSIGNMENT:
+      {{ trigger.body.assignment_text ?? inputs.assignment_text ?? "Create a simple C++ hello world program" }}
+    jsonFields:
+      - project_name
+      - folders
+      - files
+      - readme
+    schemaName: ProjectStructure
+
+  # 2️⃣ Debug AI output
+  - id: debug_ai_output
+    type: io.kestra.plugin.core.log.Log
+    message: |
+      === GEMINI OUTPUT ===
+      {{ outputs.generate_project_structure.extractedJson }}
+
+  # 3️⃣ Fix and validate AI output
+  - id: fix_and_validate_structure
+    type: io.kestra.plugin.scripts.python.Script
+    inputFiles:
+      project_data.json: "{{ outputs.generate_project_structure.extractedJson }}"
+    outputFiles:
+      - "fixed_project_data.json"
+    script: |
+      import json, sys, os, re
+
+      try:
+          with open("project_data.json", "r") as f:
+              data = json.load(f)
+
+          # Fix folders if string
+          if isinstance(data.get("folders", []), str):
+              data["folders"] = json.loads(data["folders"])
+
+          # Fix files if string
+          if isinstance(data.get("files", []), str):
+              try:
+                  data["files"] = json.loads(data["files"])
+              except json.JSONDecodeError:
+                  # Replace unescaped quotes in starter_code
+                  fixed_files = re.sub(r'(std::cout\s*<<\s*)"([^"]*)"', r"\1'\2'", data["files"])
+                  data["files"] = json.loads(fixed_files)
+
+          # Validation
+          errors = []
+          if not data.get("project_name"): errors.append("Missing project_name")
+          if not isinstance(data["folders"], list) or not data["folders"]: errors.append("Invalid folders")
+          if not isinstance(data["files"], list) or not data["files"]: errors.append("Invalid files")
+          file_paths = [f.get("path") for f in data["files"] if isinstance(f, dict)]
+          if "src/main.cpp" not in file_paths: errors.append("Missing src/main.cpp")
+          if not data.get("readme"): errors.append("Missing readme")
+          if errors:
+              for e in errors: print(f"❌ {e}")
+              sys.exit(1)
+
+          with open("fixed_project_data.json", "w") as f:
+              json.dump(data, f, indent=2)
+
+      except Exception as e:
+          print(f"❌ FATAL ERROR: {e}")
+          sys.exit(1)
+
+  # 4️⃣ Create files and zip
+  - id: create_files_and_zip
+    type: io.kestra.plugin.scripts.python.Script
+    inputFiles:
+      project_data.json: "{{ outputs.fix_and_validate_structure.outputFiles['fixed_project_data.json'] }}"
+    outputFiles:
+      - "project.zip"
+    script: |
+      import os, sys, json, zipfile
+
+      try:
+          with open("project_data.json", "r") as f:
+              raw = f.read().strip()
+
+              try:
+                  data = json.loads(raw)
+              except json.JSONDecodeError:
+                  # Try to recover from invalid JSON by fixing common issues
+                  import re
+
+                  # Replace unescaped newlines inside strings
+                  raw = raw.replace("\n", "\\n")
+
+                  # Replace double quotes in C++ cout with single quotes
+                  raw = re.sub(
+                      r'(std::cout\s*<<\s*)"([^"]*)"',
+                      r"\1'\2'",
+                      raw
+                  )
+
+                  data = json.loads(raw)
+
+
+          project_name = data["project_name"]
+          project_path = os.path.join(os.getcwd(), project_name)
+          os.makedirs(project_path, exist_ok=True)
+
+          # Create folders
+          for folder in data["folders"]:
+              os.makedirs(os.path.join(project_path, folder), exist_ok=True)
+
+          # Create files
+          for file_info in data["files"]:
+              full_path = os.path.join(project_path, file_info["path"])
+              os.makedirs(os.path.dirname(full_path), exist_ok=True)
+              with open(full_path, "w") as f:
+                  f.write(file_info["starter_code"])
+
+          # Create README.md
+          with open(os.path.join(project_path, "README.md"), "w") as f:
+              f.write(data["readme"])
+
+          # Create zip
+          zip_path = os.path.join(os.getcwd(), "project.zip")
+          with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+              for root, dirs, files_in_dir in os.walk(project_path):
+                  for file in files_in_dir:
+                      zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), project_path))
+
+      except Exception as e:
+          print(f"❌ FATAL ERROR: {e}")
+          sys.exit(1)
+
+outputs:
+  - id: download
+    type: FILE
+    value: "{{ outputs.create_files_and_zip.outputFiles['project.zip'] }}"
+
+  - id: project_info
+    type: JSON
+    value: "{{ read(outputs.fix_and_validate_structure.outputFiles['fixed_project_data.json']) }}"
+
+triggers:
+  - id: webhook
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: umer
