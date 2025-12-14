@@ -1,6 +1,6 @@
-# AutoAssignment Builder
+# C++ Project Structure Builder
 
-AutoAssignment Builder generates beginner-friendly C++ starter projects from an assignment description by orchestrating AI and automation.
+C++ Project Structure Builder generates beginner-friendly C++ starter projects from an assignment description by orchestrating AI and automation.
 
 Repository layout
 - `frontend/` — Vite + React application that sends assignment text to a Kestra webhook and downloads generated project zips
@@ -13,8 +13,12 @@ The workflow:
   - Creates files and folders and produces `project.zip` (and an `artifact.json` manifest)
 
 Note: For Kestra installation, see the official Kestra documentation or the Kestra project site for Docker and cloud deployment options.
+
 Summary
 - The frontend triggers a Kestra webhook with `assignment_text`. The Kestra workflow runs, produces a zip of the generated starter project, and the frontend polls for completion and downloads the resulting file.
+
+Demo
+- Watch the project demo video: [Watch the demo](https://youtu.be/chp_SeIY_eg)
 
 Prerequisites
 - Node 18+ and npm/yarn installed locally.
@@ -38,14 +42,6 @@ To build and preview a production build locally:
 ```bash
 npm run build
 npm run preview
-```
-3. Create `frontend/.env` with your Kestra configuration (example keys below). Never commit secrets — an example `.env.example` is included (`frontend/.env.example`). If you accidentally committed a `.env` file, remove it and rotate any exposed credentials (example):
-
-```bash
-# Remove the file from the repo while keeping it locally
-git rm --cached frontend/.env
-git commit -m "Remove sensitive .env"
-# (optional) Force-rewrite history only if needed; be cautious.
 ```
 
 Environment variables (frontend/.env)
@@ -71,7 +67,7 @@ Test the webhook by triggering it manually (replace placeholders):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -u "${KESTRA_USER}:${KESTRA_PASS}" \
-  -d '{"assignment_text":"Create a simple C++ calculator program with a Makefile"}' \
+  -d '{"assignment_text":"Create a simple C++ calculator program with a classes and file handling"}' \
   "${KESTRA_URL}/api/v1/${TENANT}/executions/webhook/${NAMESPACE}/${FLOW}/${KEY}"
 ```
 
